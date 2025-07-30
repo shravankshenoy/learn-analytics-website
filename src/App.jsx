@@ -1,6 +1,8 @@
 import React from "react";
 import Quiz from "./Quiz";
 import {Link} from "react-router-dom"
+import MarkdownViewer from "./page";
+
 /*
 link is a void element tag and must neither have `children` nor use `dangerouslySetInnerHTML`.
 The <link> tag is a void element used to define the relationship between the current document and an external resource. Common uses include linking to stylesheets (<link rel="stylesheet" href="styles.css">) or favicons. As a void element, it does not have an explicit closing tag and should not contain any content within it.
@@ -17,7 +19,10 @@ function App() {
   return (
     <div>
       <h1 style={{ textAlign: "center", marginTop: "1rem" }}>Main Page</h1>
+      <Link to={"/nlp-basics"}>NLP Basics</Link>
       <Link to={"/gen-ai-quiz"}><div>Gen AI Quiz</div></Link>
+      <Link to={"/prompt-engineering"}><div>Prompt Engineering</div></Link>
+      
     </div>
   );
 }
