@@ -5,6 +5,7 @@ import App from './App.jsx'
 import Quiz from './Quiz.jsx'
 import MarkdownViewer from "./page";
 import nlpbasics from "/nlp-basics.md";
+import './index.css';
 
 //import nlpbasics from "./../public/nlp-basics.md";
 //console.log(nlpbasics)
@@ -41,7 +42,11 @@ const router = createBrowserRouter([
   {path:"/", element:<App/>},
   {path:"/gen-ai-quiz", element:<Quiz/>},
   {path:"/nlp-basics", element:<MarkdownViewer file={nlpbasics}/>},
-  {path:"/prompt-engineering", element:<MarkdownViewer file="/prompt-engineering.md"/>}
+  {path:"/llm-roles", element:<MarkdownViewer file="/llm-roles.md"/>},
+  {path:"/prompt-engineering", element:<MarkdownViewer file="/prompt-engineering.md"/>},
+  {path:"/rag", element:<MarkdownViewer file="/rag.md"/>},
+  {path:"/data-engineering", element:<MarkdownViewer file="/spark.md"/>}
+
 ]
 )
 

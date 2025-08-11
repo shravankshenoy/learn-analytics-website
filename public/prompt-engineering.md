@@ -22,7 +22,7 @@
 
 A more real world example:
 ```
-Classify customer emails into one of these categories: Billing, Technical Issue, Feedback.
+You classify customer emails into one of these categories: Billing, Technical Issue, Feedback.
 
 ### Examples
 Email: "I was charged twice for my last purchase. Please look into this."

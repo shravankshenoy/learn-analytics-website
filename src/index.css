@@ -1,0 +1,12 @@
+html, body, #root {
+      height: 100%;
+      margin: 0; /* Remove default body margin */
+      padding: 0;
+    }
+
+@media (min-width: 1200px) { /* Apply these styles for screens 1200px and wider */
+      #root {
+        padding: 0 200px; /* Add 50px padding on left and right */
+        font-size: 20px;
+      }
+}

@@ -19,9 +19,12 @@ function App() {
   return (
     <div>
       <h1 style={{ textAlign: "center", marginTop: "1rem" }}>Main Page</h1>
+      <h2> Gen AI</h2>
       <Link to={"/nlp-basics"}>NLP Basics</Link>
-      <Link to={"/gen-ai-quiz"}><div>Gen AI Quiz</div></Link>
+      <Link to={"/llm-roles"}><div>LLM Roles</div></Link>
+      <Link to={"/gen-ai-quiz"}><div>LLM Roles Quiz</div></Link>
       <Link to={"/prompt-engineering"}><div>Prompt Engineering</div></Link>
+      <Link to={"/rag"}><div>RAG</div></Link>
       
     </div>
   );

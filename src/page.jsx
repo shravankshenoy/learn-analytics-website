@@ -18,6 +18,8 @@ Side effects refer to any operations or behaviors that occur in a component afte
 
 When you begin writing code in React to fetch data from an API, you may encounter an issue where your application enters into an infinite rendering loop. This occurs because updating the state triggers a re-render, leading to the execution of the same code again. By using the useEffect hook we can make sure that API call happens only when a value changes rather than every single time. In the file loading case below, we load the file only when the file changes. The second argument in the useEffect hook is the dependency array, i.e. when the function should run
 
+https://gurindernarang.medium.com/side-effect-useeffect-in-react-2dc6cdf0b9c5
+
 How does fetch read a file in js? Also why do we need to use aync-await while fetching file?
 
 
@@ -67,7 +69,6 @@ function MarkdownViewer(props){
             <ReactMarkdown>{content}</ReactMarkdown>
         </div>
     );
-
 
 }
 

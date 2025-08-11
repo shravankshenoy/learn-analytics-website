@@ -155,6 +155,9 @@ Classes (introduced in ES6) are primarily syntactic sugar over the existing prot
 "Prototypal inheritance" is an unofficial term that the community invented to describe the delegation behavior (when you try to access a property or method on an object, JavaScript first checks if that object itself has the property. If not, it then looks up the prototype chain, following the [[Prototype]] link, until it finds the property or reaches the end of the chain which is usually null) that we believed at the time to be unique to JavaScript. But actually it turns out delegation isn't unique to JavaScript at all. Nor is it unique to prototypes, since class inheritance often uses delegation.
 https://www.reddit.com/r/learnjavascript/comments/16y8b2b/inheritance_vs_classical_is_this_a_succinct/
 
+
+https://www.reddit.com/r/webdev/comments/8fvasq/what_is_the_benefit_of_react_vs_pure_javascript/
+https://www.reddit.com/r/reactjs/comments/17om8v9/what_is_the_point_of_state_management/
 ***/
 
 export default function LLMRoleQuiz() {
