@@ -81,6 +81,8 @@ Meaning : Expected value is not about any single game. Instead, over a large num
     * Target Variable Identification
     * Do the features contain information that helps predict the target?
 
+* Detecting signal in target : When we say the target has "signal", we usually mean - There’s a systematic, predictable relationship between the features (X) and the target (y), not just random noise.
+
 * To identify if features contain information one approach we can use is **shuffling the target**. If the target is truly related to the features, a model like XGBoost can find patterns and reduce error, if target is just noise, performance will look same if we shuffle the target. Shufflling breaks relationship between features and target. The approach is as follows
     * Train an XGB on the original data features and target (if there were non-linear signals, then XGB would find them. If XGB cannot find any signal in the original dataset it indicates that it isn't "low signal" or "noisy signal", instead it is just random numbers with "no signal")
     * Shuffle data 100 times and train XGB on each shuffle and calculated CV RMSE. You get a distribution of scores under the no signal assumption i.e. null hypothesis is no relationship between features and target
@@ -251,7 +253,7 @@ sqrt_transformed = np.sqrt(df[target])
 
 ## Visualizing impact of transformation
 sns.histplot(log_transformed, kde=True, bins=30)
-probplot(log_transformed, dist=norm, plot=plt)
+probplot(log_transformed, dist='norm', plot=plt)
 
 ```
 
@@ -318,6 +320,59 @@ skewness_value = skew(df[target])
 * Interpreting a Q-Q plot - refer 4 video by John Barosso
     * Heavy tails → Points bend away at the ends.
     * Skewness → Points curve systematically above/below the line.
+
+
+* Handling missing values
+
+```
+null_count = train_df.isnull().sum()
+
+```
+
+* Is feature engineering required? : Feature Engineering involves 3 things
+    * Feature selection
+    * Feature extraction
+    * Adding features through domain expertise
+Xgboost only does feature selection. The other 2 has to be done by us (only a deep learning model could replace feature extraction for you) Xgboost would have hard time on picking relations such as a*b, a/b and a+b for features a and b (refer 10)
+
+* Tree-Based Models Learn by Splitting, Not Algebra. Hence they can learn additive relationship easily but harder time with multiplicate and division. And even harder time with non-linear transforms
+
+* Ways to create new features include
+    * Multiplication/Interaction features 
+    * Non-linear/Polynomial like log, square 
+    * Division/Pairwise Ratios (safe division)
+    * Binning
+
+```
+df_new['Rhythm_Energy'] = df_new['RhythmScore'] * df_new['Energy']
+
+df_new['Energy_Squared'] = df_new['Energy'] ** 2` 
+df_new['Log_Duration'] = np.log1p(df_new['TrackDurationMs'])
+
+df_new['Acoustic_Instrumental_Ratio'] = df_new['AcousticQuality'] / (df_new['InstrumentalScore'] + 0.01)
+
+df["DurationBin"] = pd.qcut(df["TrackDurationMin"], q=10, duplicates='drop').cat.codes
+
+
+```
+
+* Interaction features are new features created by combining two or more existing features, usually to allow the model to capture relationships that aren't obvious when features are considered independently. Ways to create interaction features include
+    * Manual numeric-numeric interaction (multiply/divide)
+    * Automatic numeric-numeric interaction (using sklearn.preprocessing.PolynomialFeatures)
+    * Categorical-categorical interactions (combine 2 categorical columns into a compound column)
+    * Categorical-numerical interaction (label/one-hot encode cat column, then multiply with numerical column)
+
+```
+
+df = pd.DataFrame({
+    'road_type': ['urban', 'highway', 'urban', 'rural'],
+    'lighting': ['daylight', 'night', 'night', 'dim']
+})
+
+df['road_lighting_interaction'] = df['road_type'] + '_' + df['lighting']
+# You can then Label Encode or One Hot Encode this interaction column for modeling.
+
+```
 
 * For categorical variable - if the data is highly imbalanced, then some feature engineering required such as 
     * Sampling techniques (oversampling, smote)
@@ -447,18 +502,305 @@ print(f"OOF RMSE: {cv_score:.5f}")
 
 * GridSearchCrossValidation : 
 
+
+* Refit on full training : This refers to the practice of retraining a machine learning model on the entire available dataset after the model's architecture and hyperparameters have been finalized through processes like cross-validation or a train-validation-test split.
+
+* An alternative to “refit on full” is to increase the number of folds. When we use 5, 10, 20 KFold, each model is trained with 80%, 90%, 95% data respectively. (So “refit on full” is like having 100+ folds)
+
 * In xgboost, the model’s predictive power comes from all trees up to that round. XGBoost builds models additively: Each boosting round add one new tree, and predictions are made by summing the outputs of all trees created upto that round
+
+* For xgboost, when running experiments, it is often helpful to use a larger learning rate like LR=0.3 or LR=0.1. This lets us perform faster experiments. After we find GBDT models to include in our ensemble, we can usually boost their CV and LB a little more by decreasing the learning rate and training them longer. We can train the same models with LR=0.01 or LR=0.005
 
 * Early stopping in XGBoost is a regularization technique designed to prevent overfitting and optimize training time. It works by monitoring the model's performance on a separate validation set during the training process and halting training when performance on this set stops improving for a specified number of rounds. For `model = xgb.train(..., num_boost_round=10_000, early_stopping_rounds=100)` if the best iteration was 1234 and no improvement happened for 100 rounds, XGBoost will actually stop at round 1334 — not at 1234. To overcome this we use iteration_range. `iteration_range=(0, model.best_iteration + 1)` which means: “Make predictions using all trees from the beginning up to and including the best iteration found during training.”
 
 * Why early stopping is considered data leakage : Early stopping looks at the validation loss to decide how long to train (i.e., optimal number of boosting rounds). But in cross-validation, the validation set is supposed to represent unseen data. If we use it to tune training hyperparameters (like num_boost_round), then the validation set is no longer “purely unseen” → it influenced the training process. This is why it is called a data leak (mild one unless you begin using 100 or 1000 folds, then leak becomes more influencial)
 
+* Using early stopping + refit with full : Lets say we train 7 KFold above with early stopping, and optimal number of iterations for each KFold are 2700, 2232, 2652, 2000, 2327, 2288, 1842 respectively. The average is 2292. Assuming early_stopping_rounds=200, average is actually 2092. When training with 100% train data (i.e. refit on full), we need to use K/(K-1) more iterations. So we use 7/6 * 2092 = 2440. We will now train with 100% train data using fixed 2440 iterations.
+
+
+
 * R² is not only for linear models — you can compute it for any regression model.
 
-* Plot distribution of y_pred vs y_test. 
+* R2 value tell about amount of variability in target explained by model
 
-* We can use mean of target variable as prediction and compare your model to mean baseline. This is where R2 comes, R² measures how well your model explains the variation in the target variable compared to a simple baseline (just predicting the mean). This can easily be understood from the formula 
+* We can use mean of target variable in training data as prediction and compare your model to mean baseline. This is where R2 comes, R² measures how well your model explains the variation in the target variable compared to a simple baseline (just predicting the mean). This can easily be understood from the formula 
 ![R2 formula](r2_formula.png)
+
+* A low R2 value does not necessarily imply a good model. For example in the Predicting the Beats-per-Minute of Songs challenge, target values had a normal distribution with a mean ~120.Predictions have the same general distribution, just a lot narrower. The residuals may not be large because the range of target values is small to begin with, but that doesn't mean that anyone has a good model even if R2 is low. Thus a good R2 in low variance target does not mean much
+
+* Scenarios where a high R2 does not mean much
+    * Low variance targets
+    * Overfitting (R2 does not tell if model fits well out of sample)
+    
+
+```
+# Low variance target example
+y_true = [1000, 1010, 990, 1005, 995]
+y_pred = [1000, 1000, 1000, 1000, 1000]
+R² = 1 - 250/2500 = 0.90. High R2 but the model is useless
+
+```
+
+* R2 cannot check if there is enough signal in the target
+
+* Suppose we generate synthetic data using a known function f(x) plus random noise. We then train a regression model that is exactly f(x), and get an R² ≈ 0.92. Then no trained model can get an R2 better than 0.92. This is because we injected Gaussian noise, so out of total variance in base signal, 8% of the variance is due to noise, which no model can explain (unless model overfits on noise). If we substitute formula it is R2 = 1 - (Noise variance/Total variance)
+
+* In stacking (stacked ensembling), instead of training the second-level model (the meta-model) on the original input features (e.g., age, salary, pixels…), we train it on the predictions of the first-level models (the base learners). These predictions of first-level models become new features for the second-level model, hence the name meta-features. Meta-features = features generated by models, not by the original data. 
+
+* Approach to do stacking:
+    1. Train a model (say xgboost) on folds of train data and predict on the out-of-fold to get model's unbiased prediction on training data (the shape of this prediction will be (train_num_rows, 1))
+    2. Repeat step 1 using other models (say catboost, random forest, lgbm). For each model you will get a prediction on training data of shape (train_num_rows, 1)
+    3. Concatenate all of these predictions, you will get a matrix of shape (train_num_rows, 4) (assuming we have trained using 4 different models). These prediction of model will serve as features for the meta-model
+    4. Train a lasso model with the above predictions/metafeatures matrix as input and the y_train of training data as output. This meta-model will decide how much weightage to be given to each of the base models
+
+
+* An alternate stacking approach is when we train model using cross validation approach, we store each of the models. So if we have 5 folds, we will have 5 xgboost models (each xgboost model trained on 4 of the 5 folds), 5 catboost models, 5 lgbm, etc. We then use each of these models to predict on entire training data and then take average of that for each model type. For example we will have 5 xgboost predictions of shape (train_num_rows, 5), which we then average to get a prediction of shape (train_num_rows, 1). Similarly for catboost, lgbm etc. We then concatenate the prediction of different model types to get the final meta-features matrix, and train a meta model like lasso on that. The below code does the same (from reference 9)
+
+```
+def train_lightgbm(X_train, y_train, X_val, y_val):
+    """Train a LightGBM model"""
+    params = {
+        'objective': 'regression',
+        'metric': 'rmse',
+        'boosting_type': 'gbdt',
+        'learning_rate': 0.05,
+        'num_leaves': 31,
+        'max_depth': 6,
+        'subsample': 0.8,
+        'colsample_bytree': 0.8,
+        'random_state': RANDOM_SEED,
+        'verbose': -1
+    }
+    
+    train_data = lgb.Dataset(X_train, label=y_train)
+    val_data = lgb.Dataset(X_val, label=y_val, reference=train_data)
+    
+    callbacks = [lgb.early_stopping(stopping_rounds=100, verbose=False)]
+    
+    model = lgb.train(
+        params,
+        train_data,
+        valid_sets=[val_data],
+        num_boost_round=1000,
+        callbacks=callbacks
+    )
+    
+    return model
+
+
+def train_xgboost(X_train, y_train, X_val, y_val):
+    """Train an XGBoost model"""
+    params = {
+        'objective': 'reg:squarederror',
+        'eval_metric': 'rmse',
+        'learning_rate': 0.05,
+        'max_depth': 6,
+        'subsample': 0.8,
+        'colsample_bytree': 0.8,
+        'n_estimators': 1000,
+        'random_state': RANDOM_SEED,
+        'verbosity': 0
+    }
+    
+    model = xgb.XGBRegressor(**params)
+    model.fit(
+        X_train, y_train,
+        eval_set=[(X_val, y_val)],
+        early_stopping_rounds=100,
+        verbose=False
+    )
+    
+    return model
+
+def train_catboost(X_train, y_train, X_val, y_val):
+    """Train a CatBoost model"""
+    params = {
+        'loss_function': 'RMSE',
+        'learning_rate': 0.05,
+        'depth': 6,
+        'iterations': 1000,
+        'random_seed': RANDOM_SEED,
+        'l2_leaf_reg': 3,
+        'bootstrap_type': 'Bayesian',
+        'verbose': False
+    }
+    
+    model = cb.CatBoost(params)
+    model.fit(
+        X_train, y_train,
+        eval_set=(X_val, y_val),
+        early_stopping_rounds=100,
+        verbose=False
+    )
+    
+    return model
+
+# Train and evaluate models across folds
+for fold_idx, (train_idx, val_idx) in enumerate(folds):
+    print(f"\nTraining fold {fold_idx + 1}/{n_folds}")
+    
+    # Split data for this fold
+    X_fold_train, X_fold_val = X_train.iloc[train_idx], X_train.iloc[val_idx]
+    y_fold_train, y_fold_val = y_train.iloc[train_idx], y_train.iloc[val_idx]
+    
+    # Train models
+    print("Training LightGBM...")
+    lgb_model = train_lightgbm(X_fold_train, y_fold_train, X_fold_val, y_fold_val)
+    
+    print("Training XGBoost...")
+    xgb_model = train_xgboost(X_fold_train, y_fold_train, X_fold_val, y_fold_val)
+    
+    print("Training CatBoost...")
+    cb_model = train_catboost(X_fold_train, y_fold_train, X_fold_val, y_fold_val)
+    
+    # Random Forest as an additional diverse model
+    print("Training Random Forest...")
+    rf_model = RandomForestRegressor(n_estimators=200, max_depth=10, random_state=RANDOM_SEED, n_jobs=-1)
+    rf_model.fit(X_fold_train, y_fold_train)
+    
+    # Make predictions on validation fold
+    lgb_preds = lgb_model.predict(X_fold_val)
+    xgb_preds = xgb_model.predict(X_fold_val)
+    cb_preds = cb_model.predict(X_fold_val)
+    rf_preds = rf_model.predict(X_fold_val)
+    
+    # Create a weighted average of predictions
+    # We give higher weights to models that generally perform better
+    blend_preds = 0.35 * lgb_preds + 0.35 * xgb_preds + 0.2 * cb_preds + 0.1 * rf_preds
+    
+    # Store out-of-fold predictions
+    oof_predictions[val_idx] = blend_preds
+    
+    # Make predictions on test set
+    lgb_test_preds = lgb_model.predict(X_test)
+    xgb_test_preds = xgb_model.predict(X_test)
+    cb_test_preds = cb_model.predict(X_test)
+    rf_test_preds = rf_model.predict(X_test)
+    
+    # Average test predictions from this fold
+    fold_test_preds = 0.35 * lgb_test_preds + 0.35 * xgb_test_preds + 0.2 * cb_test_preds + 0.1 * rf_test_preds
+    test_predictions += fold_test_preds / n_folds
+    
+    # Calculate and display fold metrics
+    lgb_rmse = rmse(y_fold_val, lgb_preds)
+    xgb_rmse = rmse(y_fold_val, xgb_preds)
+    cb_rmse = rmse(y_fold_val, cb_preds)
+    rf_rmse = rmse(y_fold_val, rf_preds)
+    blend_rmse = rmse(y_fold_val, blend_preds)
+    
+    print(f"Fold {fold_idx + 1} Results:")
+    print(f"LightGBM RMSE: {lgb_rmse:.5f}")
+    print(f"XGBoost RMSE: {xgb_rmse:.5f}")
+    print(f"CatBoost RMSE: {cb_rmse:.5f}")
+    print(f"Random Forest RMSE: {rf_rmse:.5f}")
+    print(f"Blended RMSE: {blend_rmse:.5f}")
+    
+    # Store models for this fold
+    models.append({
+        'fold': fold_idx,
+        'lgb_model': lgb_model,
+        'xgb_model': xgb_model,
+        'cb_model': cb_model,
+        'rf_model': rf_model
+    })
+
+# Calculate overall cross-validation score
+cv_score = rmse(y_train, oof_predictions)
+print(f"\nOverall CV RMSE: {cv_score:.5f}")
+
+
+# Filter models if any failed to train
+valid_models = []
+for model in models:
+    if all(m is not None for m in [model['lgb_model'], model['xgb_model'], model['cb_model'], model['rf_model']]):
+        valid_models.append(model)
+
+if len(valid_models) > 0:
+    # Create meta-features for stacking
+    X_meta_train = np.column_stack([
+        np.array([model['lgb_model'].predict(X_train) for model in valid_models]).mean(axis=0),
+        np.array([model['xgb_model'].predict(X_train) for model in valid_models]).mean(axis=0),
+        np.array([model['cb_model'].predict(X_train) for model in valid_models]).mean(axis=0),
+        np.array([model['rf_model'].predict(X_train) for model in valid_models]).mean(axis=0)
+    ])
+
+    # Create meta-features for test set
+    X_meta_test = np.column_stack([
+        np.array([model['lgb_model'].predict(X_test) for model in valid_models]).mean(axis=0),
+        np.array([model['xgb_model'].predict(X_test) for model in valid_models]).mean(axis=0),
+        np.array([model['cb_model'].predict(X_test) for model in valid_models]).mean(axis=0),
+        np.array([model['rf_model'].predict(X_test) for model in valid_models]).mean(axis=0)
+    ])
+
+    # Train a Ridge meta-model
+    meta_model = Ridge(alpha=1.0)
+    meta_model.fit(X_meta_train, y_train)
+
+    # Make final predictions
+    stacking_predictions = meta_model.predict(X_meta_test)
+
+    # Analyze the performance of the stacking model
+    stacking_oof_preds = meta_model.predict(X_meta_train)
+    stacking_cv_score = rmse(y_train, stacking_oof_preds)
+    print(f"Stacking Ensemble CV RMSE: {stacking_cv_score:.5f}")
+
+    # Compare with the simple average approach
+    print(f"Simple Average Ensemble CV RMSE: {cv_score:.5f}")
+
+    # Select the better performing approach for final predictions
+    if stacking_cv_score < cv_score:
+        print("Using stacking ensemble for final predictions")
+        final_predictions = stacking_predictions
+    else:
+        print("Using simple average ensemble for final predictions")
+        final_predictions = test_predictions
+else:
+    print("Not enough valid models for stacking. Using simple average ensemble.")
+    final_predictions = test_predictions
+
+
+```
+
+* One advatage of k-fold cross validation over splitting data into train and eval is in train-eval split, we only predict on the eval set, but in k-fold, we get predict for the entire training data. For example if we do a 80-20 split, we train on 80% of data and predict on the 20% eval dataset. Instead if we do a 5-fold cross validation, we have 5 iterations, and in each iteration, we predict on a different 20% of the data, so we end up predicting on the entire data and can then compare that against y_train
+
+* Applying bounds to prediction : If the prediction of model is too low or too high, we replace it with some fixed value
+```
+min_bpm = max(60, y_train.min())  # Most songs have at least 60 BPM
+max_bpm = min(200, y_train.max())  # Most songs have at most 200 BPM
+bounded_predictions = np.clip(final_predictions, min_bpm, max_bpm)
+
+```
+
+* Some ways to compare prediction values with actual values are
+    * Plot distribution of y_pred vs y_test
+    * Scatter plot between y_pred and y_test
+    * Residual plot of y_pred vs y_residual (y_residual = y_test-y_pred)
+Below is code for all of the above (from reference 9)
+```
+# Distribution plot
+plt.figure(figsize=(12, 6))
+plt.hist(y_train, alpha=0.5, label='Actual BPM', bins=50)
+plt.hist(oof_predictions, alpha=0.5, label='Predicted BPM', bins=50)
+
+# Scatter plot
+plt.scatter(y_train, oof_predictions, alpha=0.3, s=10)
+
+# Residual plot
+residuals = y_train - oof_predictions
+plt.figure(figsize=(12, 6))
+plt.scatter(oof_predictions, residuals, alpha=0.3, s=10)
+
+```
+
+* Why automated machine learning is not easy : Lets say you ask a non-DS to go pull customer data and predict likelihood of churn. 
+    * What data do they need? 
+    * Which SQL tables do they need to query?
+    * What are the relevant features? 
+    * Is it a time series problem? 
+    * How about engineering features based on historical behaviour? 
+    * How do you identify the target column? 
+    * Now let's say they manage all of that, but the model scores 40% accuracy, now what?
+
 
 
 
@@ -468,7 +810,7 @@ print(f"OOF RMSE: {cv_score:.5f}")
 3. How does stratified kfold work for imbalanced dataset?
 4. Why does creation of a Q–Q plot in Excel need an adjustment by 0.5? (to make the distribution symmetrical)
 5. In xgboost, why cant we use only the best iteration instead of using all the iterations from 0 till the best iteration (in the case of early stopping)?
-
+6. Can tree based methods pick relations such as a*b, a/b,a+b? Do we need to do feature engineering with models like xgboost?
 
 ### References
 1. https://datasciencewithchris.com/transform-the-target-variable/
@@ -478,3 +820,6 @@ print(f"OOF RMSE: {cv_score:.5f}")
 5. https://www.kaggle.com/code/nareshbhat/outlier-the-silent-killer
 6. https://www.kaggle.com/code/cdeotte/analyze-original-dataset-from-kaggle-playgrounds#Playground-E5-S9:-Predicting-the-Beats-per-Minute-of-Songs
 7. https://stats.stackexchange.com/questions/463870/eval-set-in-xgboost-and-validation-data
+8. https://www.reddit.com/r/datascience/comments/1054dl3/why_hasnt_automl_been_more_widely_adopted_by/
+9. https://www.kaggle.com/code/adilshamim8/predicting-the-beats-per-minute-of-songs-101
+10. https://datascience.stackexchange.com/questions/17710/is-feature-engineering-still-useful-when-using-xgboost
