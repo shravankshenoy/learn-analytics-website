@@ -7,7 +7,7 @@
 3. Financial institutions : A company in the business of dealing with financial and monetary transactions
 4. Regulatory framework : Rules, laws, guidelines set by government
 5. Risk management : Process of identifying and reducing risk
-6. Financial analysis : Evaluating a company's performance
+6. Financial analysis : Could be done across all of the previous topics (such as evaluating financial performance of an individual/company, analyze probability of default/deliquency)
 
 ### Basics
 * Asset : Any resource that has some economic value
@@ -40,7 +40,7 @@
 ### Financial instruments
 * Financial instruments is a contract that represents a monetary asset to one party and a monetary liability or equity to another party.
 
-* Not all financial instruments are securities, but all securities are financial instruments. Bank deposits (rd/fd), loans and insurance policies (life, health) are financial instruments but not securities (because bank deposits cannot be traded) 
+* Not all financial instruments are securities, but all securities are financial instruments. Bank deposits (rd/fd), loans and insurance policies (life, health) are financial instruments but not securities (because bank deposits cannot be traded). Similarly forward contracts, swaps are derivative instruments that are typically not classified as securities:
 
 * Types of financial instruments are:
     * Cash instruments : Value is determined directly by the markets. Directly represent ownership of an asset or a claim to money. Includes
@@ -62,12 +62,56 @@
 ### Financial Institutions
 
 * Major types of financial institutions include
-    * Central banks
+    * Financial regulators
     * Retail and commercial banks
     * Credit union
     * Investment banks
     * Brokerage firms
     * Mortgage companies
+
+* Major financial regulators in US include
+    * Federal Reserve (Fed)  
+    * FDIC (Federal Deposit Insurance Corporation)
+    * OCC (Office of the Comptroller of the Currency)
+    * SEC (Securities and Exchange Commision) : Oversees securities markets, including stock exchanges
+    * CFPB (Consumer Financial Protection Bureau)
+
+* FDIC was created by the Banking Act of 1933 (the Glass-Steagall Act) in the wake of/in response to the widespread bank failures during the Great Depression. It provides deposit insurance i.e. if the bank fails, FDIC will cover deposits upto $250000 per customer (provided bank is covered by FDIC)
+
+* Fed vs OCC : Fed controls overall monetary policy, like setting interest rates, whereas OCC supervises individual banks
+
+* CFPB oversees consumer-related financial products and services, and protects consumers. Customer can write complaints to CFPB if they feel a financial institution has done something wrong
+
+* Federal Reserve System vs Federal Reserve Board
+
+* Major financial regulators in India include:
+    * RBI
+    * DICGC (subsidiary of RBI) (Deposit Insurance and Credit Guarentee Corporation) 
+    * IRDAI (Insurance Regulatory and Development Authority of India)
+    * SEBI (Securities and Exchange Board of India)
+
+* In India, there isn’t a single, unified agency like the CFPB that handles all financial consumer protection. Instead, responsibilities are distributed across multiple regulators based on sector:
+RBI → Banking; SEBI → Securities; IRDAI → Insurance
+
+### Risk Management
+
+* Types of risk include
+    * Credit Risk
+    * Liquidity risk
+    * Interest rate risk
+    * Market risk
+    * Model risk
+    * Operational risk
+    * Reputational risk
+
+* Some important Regulatory reports include
+    * FR 2025A (Liquidity Monitoring Report)
+    * FR Y-9C (Consolidated Financial Statements of Bank Holding Companies)
+    * FR Y-14 (Capital Plan and Stress Test Reports)
+
+* BCBS 239 is NOT a regulatory report by itself, but rather a set of principles. When a large bank submits a report like FR 2052A, Fed expects the banks reporting to be accordance with BCBS 239 principles
+
+* Important acts pertaining USA include Glass-Steagall Act(1933), Securities Exchange Act (1934), First Basel Accord (1988), Second Bassel Accord (2004), Third Bassel Accord(2010), Dodd-Frank Wall Street Reform and Consumer Protection Act (2010)
 
 ### Payment channels
 
