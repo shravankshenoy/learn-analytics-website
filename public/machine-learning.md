@@ -6,7 +6,15 @@
 
 * Model
 
+* Types of machine learning problems for structured/tabular data:
+    * Regression
+    * Classification (2 class and multi-class)
+    * Time series forecasting
+    * Clustering
+    * Anamoly detection
 
+* Types of machine learning problems for text data
+    * Text matching (fuzzy matching)
 
 ### Statistics
 * Sample :
@@ -37,14 +45,27 @@ Meaning : Expected value is not about any single game. Instead, over a large num
 
 
 
-### Model Development Life Cycle
+### Machine Learning Development Life Cycle
+
+* Difference stages in MLDLC include
+    1. Requirement gathering
+    2. Data source analysis 
+    3. Annotation
+    4. Data pipeline development
+    5. Model development (including feature engineering, model building)
+    6. Model testing (including sensitivity analysis, identifying evaluation metrics)
+    7. Model deployment 
+    8. Model monitoring
+
 
 1. Define requirements
 - What are we trying to optimize?
 - What are latency requirements?
+- Do we need an ML model? Or can we go for other approaches?
 
 2. Analyze data sources
 -  What kind of data do we have? (tabular, time series, supervised or unsupervised)
+-  Do we have the right kind of data for building an ML model? If so how do we formulate the problem statement?
 -  What is the refresh frquency? (streaming or batch)
 -  What kind of problem? (supervised or unsupervised, regression or classification, balanced or imbalanced data)
 
@@ -337,7 +358,7 @@ Xgboost only does feature selection. The other 2 has to be done by us (only a de
 
 * Tree-Based Models Learn by Splitting, Not Algebra. Hence they can learn additive relationship easily but harder time with multiplicate and division. And even harder time with non-linear transforms
 
-* Ways to create new features include
+* Ways to create new features for numerical columns include
     * Multiplication/Interaction features 
     * Non-linear/Polynomial like log, square 
     * Division/Pairwise Ratios (safe division)
@@ -357,7 +378,7 @@ df["DurationBin"] = pd.qcut(df["TrackDurationMin"], q=10, duplicates='drop').cat
 ```
 
 * Interaction features are new features created by combining two or more existing features, usually to allow the model to capture relationships that aren't obvious when features are considered independently. Ways to create interaction features include
-    * Manual numeric-numeric interaction (multiply/divide)
+    * Manual numeric-numeric interaction (multiply/divide/binning)
     * Automatic numeric-numeric interaction (using sklearn.preprocessing.PolynomialFeatures)
     * Categorical-categorical interactions (combine 2 categorical columns into a compound column)
     * Categorical-numerical interaction (label/one-hot encode cat column, then multiply with numerical column)
@@ -440,13 +461,89 @@ for col in features:
 
 ```
 
+* Feature engineering for categorical and boolean features
+    * Categorical : Label encoding, target encoding, one-hot encoding
+    * Boolean : Convert to int
+
+```
+for col in BOOLEAN_FEATURES:
+    train_df[col] = train_df[col].astype(int)
+    test_df[col] = test_df[col].astype(int)
+
+for col in CATEGORICAL_FEATURES:    
+    le = LabelEncoder()
+    train_df[col] = le.fit_transform(train_df[col])
+    test_df[col] = le.transform(test_df[col])
+
+
+```
+
+* As a best practice, transform both train and test dataframes at the same place to avoid mistakes like 
+    1. Not applying train dataframe transformation to test dataframe
+    2. Use fit_transform for the test dataframe
+
+
+* Time series is made up of 3 components
+    1. Trend : Long term direction of data
+    2. Seasonality : Pattern that repeat at fixed interval (week, month, year)
+    3. Cyclic variations : Longer-term fluctuations that are not of a fixed period (eg. recession cycle)
+
+```
+### Approach 1 (prepare dataset for time series)
+# parse_dates instructs Pandas to interpret specified columns as datetime objects during the data loading process
+# to_period has to be applied on column with datetime type
+retail_sales = pd.read_csv(
+    "us-retail-sales.csv",
+    parse_dates=['Month'],
+    index_col='Month'
+).to_period('D')
+
+
+### Approach 2 (prepare dataset for time series)
+retail_sales = pd.read_csv(
+    "us-retail-sales.csv",
+    parse_dates=['Month']
+)
+retail_sales = retail_sales.set_index('Month').to_period('M')
+
+food_sales = retail_sales[:, 'FoodAndBevarage']
+
+# takes mean of 12 points, since center=True, mean is computed by taking 6 points to left and 5 points to right and that point. Also if number of observations are less than 6, then it gives NA 
+# ser = pd.Series(range(1, 100)) # mock series
+# ser.rolling(window=4).mean()
+# ser.rolling(window=5, center=True).mean()
+
+# Computing trend
+trend = food_sales.rolling(
+    window=12,
+    center=True,
+    min_periods=6
+).mean()
+
+# Plot trend against time series
+ax = food_sales.plot(alpha=0.5)
+ax = trend.plot(ax=ax, linewidth=3)
+
+```
+* Rolling average/moving average is used to find the trend of a time series because it helps smooth out short-term fluctuations and thus highlights the underlying long-term pattern. On averaging nearby points, sudden spikes and dips are softened and random noise average out
+
+* Mathematically, rolling average is a low-pass filter (i.e. keeps low frequncy component i.e trend and remove high frequency component i.e. seasonality)
+
+* Stationarity : A time series is stationary if it has no long term trend or seasonality. In mathematical terms:
+    * Constant mean through time
+    * Constant variance through time
+ Can be checked via Augmented Dickey-Fuller (ADF) test
+
+* Stationarity matters because if time series is not stationary, every data point has its own variance, which means each data point belongs to a different distribution. This makes it hard to build model, because model assumes some consistent underlying distribution
 
 
 ### Model Building
 
 * Cross-validation : A resampling technique in machine learning used to evaluate the performance of a model. Using train-test split, we can evaluate the model only once, while in this approach, the model can be evaluated multiple times using same data
 
-* K Fold Cross Validation : A technique that divides a dataset into K equal-sized subsets (called "folds") for evaluating a model's performance. In each iteration, one fold serves as the test set while the remaining K-1 folds are used for training the model. After each iteration, evaluation score is retained and model is discarded
+* K Fold Cross Validation : A technique that divides a dataset into K equal-sized subsets (called "folds") for evaluating a model's performance. In each iteration, one fold serves as the test set while the remaining K-1 folds are used for training the model. After each iteration, evaluation score is retrained and model is discarded
+
+* Another advantage of k fold cv verses train-test split is that we can get prediction on entire train data instead of a small portion of train data.
 
 * OOF (Out of Fold) Predictions: In K fold CV, after training, the model makes predictions on the held-out validation fold. These predictions are called "out-of-fold" predictions (happens for each iteration)
 
@@ -500,8 +597,79 @@ print(f"OOF RMSE: {cv_score:.5f}")
 
 ```
 
-* GridSearchCrossValidation : 
+* GridSearchCrossValidation : A method for hyperparameter tuning. Tries all possible combination of hyperparameter values, and for each combination it uses cross validation strategy (like k-fold) to evaluate the performance of that combination
+```
 
+param_dist = {
+    'max_depth': [3, 7, 10],
+    'learning_rate': [0.01, 0.05, 0.1, 0.3],
+    'min_child_weight': [3, 5],
+    'n_estimators': [200, 400],
+    'subsample': [0.7, 1.0],
+    'colsample_bytree': [0.7, 1.0],
+}
+
+xgb = XGBRegressor(random_state=42)
+
+grid_search = GridSearchCV(
+    estimator=xgb, 
+    param_grid=param_dist, 
+    cv=3, 
+    n_jobs=-1
+)
+
+```
+
+* GridSearchCV can be computationally very expensive when there are a lot of hyperparamters. The alternatives for lesser computational load are
+    * RandomizedSearchCV
+    * Bayesian Optimization using a library like Optuna or HyperOpt
+
+
+```
+### Using Optuna for hyperparamter tuning of Xgboost regressor
+N_SPLITS = 7
+kfold = KFold(n_splits=N_SPLITS, shuffle=True, random_state=42)
+
+def objective(trial):
+    params = {
+        'n_estimators' : trial.suggest_int('n_estimators', 3, 50),
+        'learning_rate': trial.suggest_float('learning_rate', 0.005, 0.05),
+        'max_depth': trial.suggest_int('max_depth', 6, 12),
+        'min_child_weight': trial.suggest_int('min_child_weight', 1, 6),
+        'subsample': trial.suggest_float('subsample', 0.6, 1.0),
+        'colsample_bytree': trial.suggest_float('colsample_bytree', 0.6, 1.0)
+    }
+
+    oof = np.zeros(len(train_df))
+
+    for train_idx, val_idx in kfold.split(X):
+        X_fold_train, X_fold_val = X[train_idx], X[val_idx]
+        y_fold_train, y_fold_val = y[train_idx], y[val_idx]
+
+        model = xgb.XGBRegressor(**params)
+        model.fit(
+            X_fold_train, y_fold_train,
+            eval_set=[(X_fold_val, y_fold_val)],
+            early_stopping_rounds=200,
+            verbose=False
+        )
+        oof[val_idx] = model.predict(X_fold_val)
+
+    rmse = np.sqrt(mean_squared_error(y_train, oof))
+    return rmse
+
+# ==========================
+# Run Optuna study
+# ==========================
+print("🔍 Running Optuna optimization...")
+study = optuna.create_study(direction="minimize")
+study.optimize(objective, n_trials=15)
+
+print("✅ Best trial:")
+print(study.best_trial.params)
+best_params = study.best_trial.params
+
+```
 
 * Refit on full training : This refers to the practice of retraining a machine learning model on the entire available dataset after the model's architecture and hyperparameters have been finalized through processes like cross-validation or a train-validation-test split.
 
@@ -513,10 +681,13 @@ print(f"OOF RMSE: {cv_score:.5f}")
 
 * Early stopping in XGBoost is a regularization technique designed to prevent overfitting and optimize training time. It works by monitoring the model's performance on a separate validation set during the training process and halting training when performance on this set stops improving for a specified number of rounds. For `model = xgb.train(..., num_boost_round=10_000, early_stopping_rounds=100)` if the best iteration was 1234 and no improvement happened for 100 rounds, XGBoost will actually stop at round 1334 — not at 1234. To overcome this we use iteration_range. `iteration_range=(0, model.best_iteration + 1)` which means: “Make predictions using all trees from the beginning up to and including the best iteration found during training.”
 
+* Purpose of eval_set in Xgboost
+    * Help to implement early stopping. When combined with the early_stopping_rounds parameter, XGBoost will automatically stop training if the performance on the specified evaluation set does not improve for a certain number of consecutive rounds. This prevents overfitting
+    * Observe how the model's performance metrics (e.g., RMSE for regression) evolve over boosting rounds
+
 * Why early stopping is considered data leakage : Early stopping looks at the validation loss to decide how long to train (i.e., optimal number of boosting rounds). But in cross-validation, the validation set is supposed to represent unseen data. If we use it to tune training hyperparameters (like num_boost_round), then the validation set is no longer “purely unseen” → it influenced the training process. This is why it is called a data leak (mild one unless you begin using 100 or 1000 folds, then leak becomes more influencial)
 
 * Using early stopping + refit with full : Lets say we train 7 KFold above with early stopping, and optimal number of iterations for each KFold are 2700, 2232, 2652, 2000, 2327, 2288, 1842 respectively. The average is 2292. Assuming early_stopping_rounds=200, average is actually 2092. When training with 100% train data (i.e. refit on full), we need to use K/(K-1) more iterations. So we use 7/6 * 2092 = 2440. We will now train with 100% train data using fixed 2440 iterations.
-
 
 
 * R² is not only for linear models — you can compute it for any regression model.
@@ -801,7 +972,117 @@ plt.scatter(oof_predictions, residuals, alpha=0.3, s=10)
     * How do you identify the target column? 
     * Now let's say they manage all of that, but the model scores 40% accuracy, now what?
 
+* Steps to use xgboost on GPU
+    1. Set TREE_METHOD = 'gpu_hist' in xgboost parameters
+    2. Set environment to use GPU (GPU T4 x2 or GPU P100 on Kaggle)
 
+
+* GPU T4 x2 gives you an option to parallelize your work while the p100 does not provide this option. "GPU T4 x2" refers to a computing environment with two NVIDIA Tesla T4 GPUs. The T4 GPU is based on NVIDIA's Turing architecture, which features Tensor Cores for accelerating AI tasks
+
+
+### Model testing
+
+* Sensitivity analysis : How much model output changes when we slightly change the input paramters
+
+* Match ratio : How many predictions match when we change the input parameter (for example one feature all zeros). Higher the match ratio, more robust the model
+
+```
+## Sensitivity analysis : Match ratio per feature
+import numpy as np
+from sklearn.datasets import load_iris
+from sklearn.model_selection import train_test_split
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+
+# Load dataset
+data = load_iris()
+X, y = data.data, data.target
+
+# Split into train/test
+X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.3, random_state=42)
+
+# Train a classifier
+model = RandomForestClassifier(random_state=42)
+model.fit(X_train, y_train)
+
+# Get baseline predictions
+y_pred_original = model.predict(X_test)
+
+# Create perturbed version of test data
+X_test_perturbed = X_test.copy()
+X_test_perturbed[:, 0] = 0
+
+# Get new predictions on perturbed data
+y_pred_perturbed = model.predict(X_test_perturbed)
+
+# Compute Match Ratio
+matches = np.sum(y_pred_original == y_pred_perturbed)
+total = len(y_pred_original)
+match_ratio = matches / total
+
+print(f"Match Ratio: {match_ratio:.3f}")
+print(f"Number of predictions unchanged: {matches}/{total}")
+
+
+```
+
+* Interpretability : Can we understand the reasoning behind model's decisions
+
+* Partial dependence plot : Used to explain how model predictions is impacted by a feature. A flat pdp low dependence on feature, a sharp rise or fall indicates high dependence
+
+* Steps to create a 1-way partial dependence plot:
+    1. Select a feature you want to analyze
+    2. Get list of all distinct values of that feature
+    3. Copy training data
+    4. Replace feature column with fixed value (create multiple copies of training data, such that each copy has only 1 value from step 2 for the selected feature)
+    5. Predict outcomes and take mean prediction (regression)/mean class probability(classification)
+
+```
+
+
+# Load dataset
+data = load_iris()
+X, y = data.data, data.target
+feature_names = data.feature_names
+
+# Train/test split
+X_train, X_test, y_train, y_test = train_test_split(X, y, random_state=42)
+
+# Train model
+model = RandomForestClassifier(random_state=42)
+model.fit(X_train, y_train)
+
+# Choose petal length feature
+feature_index = 2 
+
+x_feature = X_train[:, feature_index]
+
+feature_distinct_values = x_feature.distinct()
+grid = np.linspace(x_feature.min(), x_feature.max(), num=50)  # 50 evenly spaced values
+
+
+pdp_values = []
+# use either grid or feature_distinct_values
+for v in feature_distinct_values:
+    X_temp = X_train.copy()
+    X_temp[:, feature_index] = v
+    preds = model.predict_proba(X_temp)[:, 0]
+    pdp_values.append(preds.mean())
+
+pdp_values = np.array(pdp_values)
+
+
+# Plot the pdp charts
+plt.figure(figsize=(6,4))
+plt.plot(feature_distinct_values, pdp_values, linewidth=2) # use either grid or feature_distinct_values
+plt.xlabel(feature_names[feature_index])
+plt.ylabel("Average Predicted Probability (class 0)")
+plt.title("Partial Dependence Plot (built from scratch)")
+plt.grid(True)
+plt.show()
+
+
+```
 
 
 ### Questions
@@ -823,3 +1104,8 @@ plt.scatter(oof_predictions, residuals, alpha=0.3, s=10)
 8. https://www.reddit.com/r/datascience/comments/1054dl3/why_hasnt_automl_been_more_widely_adopted_by/
 9. https://www.kaggle.com/code/adilshamim8/predicting-the-beats-per-minute-of-songs-101
 10. https://datascience.stackexchange.com/questions/17710/is-feature-engineering-still-useful-when-using-xgboost
+11. https://www.youtube.com/playlist?list=PLKmQjl_R9bYd32uHImJxQSFZU5LPuXfQe (Time Series - Egor Howell)
+12. https://www.kaggle.com/competitions/store-sales-time-series-forecasting/code?competitionId=29781&sortBy=voteCount&excludeNonAccessedDatasources=true
+
+### To Explore
+1. https://medium.com/@anagha.srivasa/nvidia-t4-x2-v-s-p100-gpu-when-to-choose-which-one-87cf1c55f386
