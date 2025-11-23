@@ -43,6 +43,7 @@ Meaning : Expected value is not about any single game. Instead, over a large num
 
 * Bias-Variance tradeoff
 
+* A statonary process is mean reverting and shocks fade, whereas a non stationary process has persistent trend and shocks accumulate
 
 
 ### Machine Learning Development Life Cycle
@@ -94,6 +95,33 @@ Meaning : Expected value is not about any single game. Instead, over a large num
 6. Model monitoring
 
 
+* Different stages of a time series forecasting problem
+    1. Requirement gathering 
+        * Identify the target column (especially if multiple date columns)
+        * Univariate or multivariate time series problem
+        * If other dimensions present, which dimensions we want to aggregate at (eg. take single time series, or one time series for each line of business and forecast each of the time series separately)
+        * How many day forecast
+        * Frequency of forecast (daily, weekly, monthly)
+        * Prepare data into right format (datetime index)
+    
+
+    2. Exploratory time series analysis
+        * Plot the data at different frequencis
+        * STL decomposition (decompose into level, trend, seasonality, residuals)
+        * ACF and PACF plots (with proper interpretation)
+        * Stationary check (using Augmented Dickey-Fuller(ADF) or plotting rolling statistics like mean/stddev)
+        * Fourier analysis
+
+    3. Data Preprocessing
+        * Outlier detection and removal
+        * Making data stationary (using differencing/seasonal differencing, transforms like log)
+        * Missing value treatment (removal, imputation)
+
+    4. Feature Engineering
+    
+    5. Modeling
+        * Build a baseline model using Exponential smoothing or simple ARIMA/SARIMA
+        * For more complex series, convert to regression problem
 
 
 ### Feature Engineering
@@ -101,6 +129,15 @@ Meaning : Expected value is not about any single game. Instead, over a large num
 * Some important questions to answer in a dataset are
     * Target Variable Identification
     * Do the features contain information that helps predict the target?
+
+* Feature engineering for a time series
+    * lag variables
+    * 
+
+```
+df['lag_1'] = df['value'].shift(1)
+
+```
 
 * Detecting signal in target : When we say the target has "signal", we usually mean - There’s a systematic, predictable relationship between the features (X) and the target (y), not just random noise.
 
@@ -343,7 +380,7 @@ skewness_value = skew(df[target])
     * Skewness → Points curve systematically above/below the line.
 
 
-* Handling missing values
+* Handling missing values : Missing values can be in original features as well as in derived values. Everything must be handled in separate ways
 
 ```
 null_count = train_df.isnull().sum()
@@ -488,7 +525,11 @@ for col in CATEGORICAL_FEATURES:
     2. Seasonality : Pattern that repeat at fixed interval (week, month, year)
     3. Cyclic variations : Longer-term fluctuations that are not of a fixed period (eg. recession cycle)
 
+
+* Below are code snippets to prepare data for time series analysis
+
 ```
+### Refer link 12 i.e. Kaggle link for dataset. Below snippets are from Trend notebook
 ### Approach 1 (prepare dataset for time series)
 # parse_dates instructs Pandas to interpret specified columns as datetime objects during the data loading process
 # to_period has to be applied on column with datetime type
@@ -508,6 +549,21 @@ retail_sales = retail_sales.set_index('Month').to_period('M')
 
 food_sales = retail_sales[:, 'FoodAndBevarage']
 
+### Approach 3 (create your own data)
+dates = pd.date_range(start='2025-01-01', periods=20, freq='D')
+time_series_df = pd.DataFrame(
+    {
+        'date':'dates',
+        'value': 10 + np.arange(1,21)
+    }
+)
+time_series_df = time_series_df.set_index('date')
+```
+
+
+* Below are code snippets to plot trend
+
+```
 # takes mean of 12 points, since center=True, mean is computed by taking 6 points to left and 5 points to right and that point. Also if number of observations are less than 6, then it gives NA 
 # ser = pd.Series(range(1, 100)) # mock series
 # ser.rolling(window=4).mean()
@@ -536,8 +592,97 @@ ax = trend.plot(ax=ax, linewidth=3)
 
 * Stationarity matters because if time series is not stationary, every data point has its own variance, which means each data point belongs to a different distribution. This makes it hard to build model, because model assumes some consistent underlying distribution
 
+* Common type of aggregations include count, distinct count, minimum, max, average, std dev, ratio
+
+* Autocorrelation means how much current values depend on past values. Correlation of a variable with itself at a different point
+
+$$ \rho_k = \frac{\sum_{t=k+1}^{n} (Y_t - \bar{Y})(Y_{t-k} - \bar{Y})}{\sum_{t=1}^{n} (Y_t - \bar{Y})^2} 
+
+
+$$
+
+Y_t is the observation at time t.
+$\bar{Y}$ is the sample mean of the time series.
+
+* Complex Autocorrelation Structure: When the dependence is spread across many lags and possibly
+seasonal lags.
+
+* What an ACF plot can reveal:
+    * If all the bars are within the confidence interval (except for lag 0) -> the series is likely random and has no autocorrelation. 
+    * A slow decay or a steep linear decay in the ACF plot -> indicates a trend (this is because the correlation remains high for many lags and decreases slowly)
+    * Wave like pattern with significant spikes at regular intervals (e.g., every 12 months for monthly data) -> indicates a seasonal pattern
+    * An ACF plot that decays quickly to zero suggests a stationary time series (A slow decay can indicate non-stationarity
+    
+* Statistical Significance in ACF: The shaded region on the plot is a confidence band. Bars extending beyond this band represent statistically significant correlations, meaning the correlation is unlikely to be due to random chance.
+
+* Partial autocorrelation - Correlation of a time series with delayed copy itself (effect of a lag after removing the effect of the intermediate lags (for example, effect of lag 3 after
+removing the effects of lag 1 and 2)) 
+
+* If a PACF shows a significant spike at lag 3, it means $Y(t)$ is significantly correlated with $Y(t-3)$ even after accounting the effects of lag 1
+
+* Cut off point: Point where plot drops to or stays within confidence levels, meaning higher lags do not have significant contribution. A slowly decaying PACF plot may indicate presence of seasonality in data. If PACF has no clear cut off, it means AR might not be a good model, or additional preprocessing required. 
+
+* Time series can have AR or MA signatures (refer 13): 
+    * An AR signature corresponds to a PACF plot displaying a sharp cut-off and a more slowly decaying ACF
+    * An MA signature corresponds to an ACF plot displaying a sharp cut-off and a PACF
+plot that decays more slowly.
+
+* For a time series with a linear trend:
+    * The ACF will have high positive autocorrelation at lag 1 and decay slowly as the lag increases. This slow decay happens because the trend creates persistent correlation across time.
+    * PACF will typically show a very strong spike at lag 1, a smaller spike at lag 2 and drops of very quickly. This is because once you account for the first lag, the additional lags don't add much explanatory power for a linear trend.
+
+* How to distinguish trend vs seasonality using ACF : For trend only, ACF decreases gradually and smoothly without a clear repeating pattern. For seasonality, ACF shows a wave-like pattern with significant spikes at seasonal lags (e.g lag 12 for monthly data with yearly seasonality)
+
+* For an AR(p) model:
+    * PACF cuts off after lag p (partial autocorrelations become zero beyond p)
+    * ACF tails off gradually.
+
+* For an MA(q) model:
+    * ACF cuts off after lag q (autocorrelations become zero beyond q)
+    * PACF tails off gradually.
+
+* If ACF cuts off and PACF tails -> likely MA model. If PACF cuts off and ACF tails -> likely AR model. If neither shows a clear cutoff -> consider ARMA or ARIMA.
+
+* Since PACF helps assess how many lags contribute directly to series, it is helpful in identifying order of Autoregressive model.
+
+* Time series based features
+    1. Lag and lead features
+    2. Window features
+    3. Ratio of current to window features such as 
+        * Ratio of observed day activity to last 8/15 days average activity for that customer
+        * Ratio of observed day activity (minus mean) to last 8/15 days std deviation
+        * Ratio of observed day activity to last 8/15 days minimum/maximum
+    4. Derived feature from lead lag features (min-max ratio)
+        
+        
+* The intuition behind `Ratio of observed day activity to last 8/15 days average activity` is the mean gives the baseline, what is normal for that customer, and we compare current behaviour against baseline behaviour
+    * Ratio > 1 : sudden spike in activity which could imply fraud
+    * Ratio < 1 : sudden drop in activity which could indicate churn, disengagement
+
+* The intuition behind `Ratio of observed day activity to last 8/15 days minimum/maximum` If current activity greater than historical max or less than historical min, then abnormal behaviour
+
+
+
+
+
+
 
 ### Model Building
+
+* Ordinary Least Squares : https://www.youtube.com/shorts/TrAFh3Onf3E
+
+* To use XGBoost for a time series with a trend, you should always pre-process the data to remove the trend, allowing XGBoost to focus on modeling the non-linear, high-frequency components (trend is a low frequency component) (refer next point for reason)
+
+* Tree-based models like XGBoost, Random Forest, and Decision Trees generally cannot extrapolate beyond the range of training data because of how they work (and hence called **interpolation model**). Prediction is based on splits, not equations.
+    * Trees partition the feature space into regions based on observed values.
+    * Each leaf node stores the average target value of training samples in that region.
+    * If a new input falls outside the training range, the tree still assigns it to the closest existing leaf - prediction stays within the range of seen values.
+If your training data for Value ranges from 10 to 100, and you ask the model to predict for a scenario where lag features suggest a value of 150, the model will likely predict
+something close to 100 (the max seen in training), not 150.
+
+* To handle time series with rising trend 
+    * Use models that assume a functional form (Linear Regression, Polynomial Regression, ARIMA / SARIMA) 
+    * Detrend the time series (make time series stationary)
 
 * Cross-validation : A resampling technique in machine learning used to evaluate the performance of a model. Using train-test split, we can evaluate the model only once, while in this approach, the model can be evaluated multiple times using same data
 
@@ -979,6 +1124,91 @@ plt.scatter(oof_predictions, residuals, alpha=0.3, s=10)
 
 * GPU T4 x2 gives you an option to parallelize your work while the p100 does not provide this option. "GPU T4 x2" refers to a computing environment with two NVIDIA Tesla T4 GPUs. The T4 GPU is based on NVIDIA's Turing architecture, which features Tensor Cores for accelerating AI tasks
 
+* Time series models in order of complexity
+    * ExponentialSmoothing models (Holt-Winter model)
+    * ARIMA/SARIMA models
+    * Using ml regression techniques like xgboost
+
+* Exponential smoothing models at their core give more weightage to recent observations and less on historical observations. 
+
+
+$$ \hat{y}_{t+1} = \alpha y_t + (1 - \alpha)\hat{y}_t $$
+
+$$ \alpha = smoothing parameter $$
+
+* Called exponential because older observations have exponentially smaller influence (say alpha = 0.8 then $ \alpha * (1-\alpha) = 0.2 * 0.8 = 0.16 $ and $ (1-\alpha) * (1-\alpha) = 0.2 * 0.2 = 0.04 $, cube is 0.008)
+
+$$ {y}_{4} = \alpha {y}_{3} + (1-\alpha) \hat{y}_{3}  \\
+           = \alpha {y}_{3} + (1-\alpha) (\alpha {y}_{2} + (1-\alpha) \hat{y}_{2})  $$
+
+* Time series is made up of following components
+    * Level : Average value of time series, a constant value
+    * Trend :  Direction/Slope of time series
+    * Seasonality 
+    * Cyclicity
+    * Residuals
+
+* Exponential Smoothing models are of 3 types
+    * Simple Exponential model : Takes into account only level, does not take trend or seasonality into account
+    * Double Exponential Smoothing model (Holt's Linear Trend model) : Takes level and trend into account
+    * Triple Exponential Smoothing model (Holt Winter model) : Considers level, trend and seasonality
+
+Simple Exponential Smoothing
+$$
+
+\hat{y}_{t} = {l}_{t} = \alpha * {y}_{t} + (1-\alpha) * {l}_{t-1}
+
+$$
+
+
+Double Exponential Smoothing (b stands for trend)
+$$
+
+\hat{y}_{t} = {l}_{t} + h * {b}_{t} \\
+
+{l}_{t} = \alpha * {y}_{t} + (1-\alpha) * ({l}_{t-1} + {b}_{t-1})
+
+$$
+
+Holt Winter
+```
+level_t = α * y_t + (1 − α) * (level_{t−1} + trend_{t−1})
+trend_t = β * (level_t − level_{t−1}) + (1 − β) * trend_{t−1}
+season_t = γ * (y_t − level_t) + (1 − γ) * season_{t−s})
+```
+
+* Autoregressive (AR) Model : Current value of variable  expressed as linear combination of its past values plus error. AR models capture temporal dependence in data
+
+* Moving Average (MA) Model : Uses residuals for forecasting. Instead of using previous observations, we forecast using past errors instead. Intution is, sometimes series does not strongly depend on its past values, but rather on unexpected changes that occured
+
+* MA model is NOT a rolling mean model which is also called moving average model
+
+* ARIMA has 3 parameters:
+    * p : order of autoregressor, can be deduced using PACF
+    * d : order of differencing, can be deduced using Augmented Dickey-Fuller (ADF) test
+    * q : order of moving average, can be deduced using autocorrelation
+
+* Another approach to determine p,d,q is simply by iterating over all the possible combinations and choose a model with best score against a metric such as AIC(Akaike's Information Criterion) or BIC (Bayesian Information Criterion)
+
+* SARIMA has 6 parameters, 3 for trend, 3 for seasonal
+
+* An AR model is probabilistic because of the random noise term. This random shock makes the model stochastic, not deterministic.
+
+* Holt Winter vs SARIMA
+    * Deterministic vs Probabilistic : Holt Winter is just a weighted average of past values, it just smoothes the past.
+    * Prediction vs Prediction Interval
+
+* Point Forecast vs Multistep forecast:
+    * Point forecast : predicts a single future value
+    * Multistep forecast : Predicts a series of future values (next 60 days). Can be achieved through direct forecasting (a separate model for each step) or recursive forecasting (using prevoius forecast as input for next one). More prone to error accumulation
+
+* Forecast horizon : How many days/time steps into future we are predicting - https://stats.stackexchange.com/questions/586244/what-does-it-mean-forecast-horizon-in-time-series-forecasting
+
+Creating horizon indicator - Instead of training 30 separate models, you can add a horizon feature to indicate which step ahead you are predicting. This allows a single model to learn pattrn for different horizons
+
+Hence for each time point, we create 30 rows - one for each horizon
+
+
 
 ### Model testing
 
@@ -1084,6 +1314,15 @@ plt.show()
 
 ```
 
+* Time-series aware cross-validation: Unlike standard cross-validation (which randomly splits data), time series CV respects temporal order. This means future data is never
+used to predict the past, avoiding data leakage (includes concepts like expanding window, validation gap)
+    
+* Expanding window: Start with an initial training set. For each fold, add more recent data to the training set while moving the validation window forward. Example : 
+    Fold 1: Train on Day 1-260 -> Validate after gap 
+    Fold 2: Train on Day 1-320 -> Validate after gap 
+
+* Validation Gap: Gap between training data and validation data. Prevents look-ahead bias, because features like lag variables could leak future info if validation starts immediately after training. Example : 60-day validation gap implies 60 days between last row of training data and first row to validation data.
+
 
 ### Questions
 1. Variance in statistics vs variance in machine learning? 
@@ -1106,6 +1345,7 @@ plt.show()
 10. https://datascience.stackexchange.com/questions/17710/is-feature-engineering-still-useful-when-using-xgboost
 11. https://www.youtube.com/playlist?list=PLKmQjl_R9bYd32uHImJxQSFZU5LPuXfQe (Time Series - Egor Howell)
 12. https://www.kaggle.com/competitions/store-sales-time-series-forecasting/code?competitionId=29781&sortBy=voteCount&excludeNonAccessedDatasources=true
+13. https://stats.stackexchange.com/questions/28166/how-does-acf-pacf-identify-the-order-of-mo-and-ar-terms 
 
 ### To Explore
 1. https://medium.com/@anagha.srivasa/nvidia-t4-x2-v-s-p100-gpu-when-to-choose-which-one-87cf1c55f386
