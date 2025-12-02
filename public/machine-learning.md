@@ -12,6 +12,7 @@
     * Time series forecasting
     * Clustering
     * Anamoly detection
+    * Recommendation Engine
 
 * Types of machine learning problems for text data
     * Text matching (fuzzy matching)
@@ -585,6 +586,43 @@ ax = trend.plot(ax=ax, linewidth=3)
 
 * Mathematically, rolling average is a low-pass filter (i.e. keeps low frequncy component i.e trend and remove high frequency component i.e. seasonality)
 
+* Outlier detection and removal in time series using Median Absolute Detection (MAD) outlier detection
+
+```
+dates = pd.date_range('2025-01-01','2025-06-30', freq='D')
+values = np.arange(1, 4 * len(dates), 4) 
+
+# injecting outliers
+for i in range(6):
+  rand = random.randint(1, 150)
+  values[rand] = rand * 25
+
+df = pd.DataFrame({'date':dates, 'value':values}).set_index('date')
+
+
+def eliminate_outlier(df: pd.DataFrame):
+    series = df[target]
+
+    median = series.median()
+    mad = np.median(np.abs(series - median))
+
+    # lb = median - 2 * mad
+    # ub = median + 2 * mad (typically 2 or 3)
+
+    deviation = np.abs(series - median)
+    outliers = deviation > 2 * mad
+
+    # Replace outliers with NaN and interpolate
+    series_clean = series.copy()
+    series_clean[outliers] = np.nan
+    series_clean = series_clean.interpolate(method="linear").bfill().ffill()
+
+    df[target] = series_clean
+    return df
+
+
+```
+
 * Stationarity : A time series is stationary if it has no long term trend or seasonality. In mathematical terms:
     * Constant mean through time
     * Constant variance through time
@@ -607,7 +645,7 @@ $\bar{Y}$ is the sample mean of the time series.
 * Complex Autocorrelation Structure: When the dependence is spread across many lags and possibly
 seasonal lags.
 
-* What an ACF plot can reveal:
+* What an ACF plot can reveal (refer 15 on where these plots are helpful):
     * If all the bars are within the confidence interval (except for lag 0) -> the series is likely random and has no autocorrelation. 
     * A slow decay or a steep linear decay in the ACF plot -> indicates a trend (this is because the correlation remains high for many lags and decreases slowly)
     * Wave like pattern with significant spikes at regular intervals (e.g., every 12 months for monthly data) -> indicates a seasonal pattern
@@ -645,16 +683,200 @@ plot that decays more slowly.
 
 * Since PACF helps assess how many lags contribute directly to series, it is helpful in identifying order of Autoregressive model.
 
+* Seasonality check techniques (refer 16)
+    * Kruskal–Wallis test → stable seasonality
+    * Autocorrelation seasonality check → periodic correlation
+    * STL decomposition → visual + strength of seasonality
+    * Spectral analysis (FFT) → dominant frequencies
+
+```
+import numpy as np
+import pandas as pd
+from scipy.stats import kruskal
+from statsmodels.tsa.seasonal import STL
+from statsmodels.tsa.stattools import acf
+import warnings
+warnings.filterwarnings("ignore")
+
+
+# ----------------------------------------------------------
+# 1. KRUSKAL–WALLIS: stable seasonality test
+# ----------------------------------------------------------
+
+def kw_seasonality_test(y, season_labels):
+    """
+    Perform Kruskal–Wallis test for stable seasonality.
+    """
+    y = np.asarray(y)
+    season_labels = np.asarray(season_labels)
+
+    groups = [y[season_labels == s] for s in np.unique(season_labels)]
+    stat, p = kruskal(*groups)
+    return stat, p
+
+def season_from_datetime(index, freq="month"):
+    index = pd.DatetimeIndex(index)
+    if freq == "month":
+        return index.month
+    elif freq == "weekday":
+        return index.weekday
+    elif freq == "quarter":
+        return index.quarter
+    else:
+        raise ValueError("Unsupported season frequency")
+
+season_labels = season_from_datetime(df.index, freq="month")
+stat, p = kruskal_wallis_seasonality(df['value'], season_labels)
+
+# ----------------------------------------------------------
+# 2. Autocorrelation seasonality strength
+# ----------------------------------------------------------
+
+def autocorr_seasonality_strength(y, seasonal_lag):
+    """
+    Measures seasonal autocorrelation at lag = seasonal period.
+    """
+    ac = acf(y, fft=True, nlags=seasonal_lag)
+    return ac[seasonal_lag]  # autocorrelation at seasonal period
+
+
+# ----------------------------------------------------------
+# 3. STL decomposition seasonality strength
+# ----------------------------------------------------------
+
+def stl_seasonality_strength(y, seasonal_period):
+    """
+    Returns STL seasonality strength metric:
+       strength = 1 - Var(remainder) / Var(seasonal + remainder)
+    """
+    stl = STL(y, period=seasonal_period, robust=True).fit()
+    s = stl.seasonal
+    r = stl.resid
+
+    numerator = np.var(r)
+    denominator = np.var(s + r)
+
+    strength = max(0, 1 - numerator / denominator)
+    return strength, stl
+
+
+# ----------------------------------------------------------
+# 4. FFT spectral seasonality detection
+# ----------------------------------------------------------
+
+def dominant_frequency_fft(y, sampling_rate=1):
+    """
+    Returns dominant frequency and amplitude in the series using FFT.
+    """
+    y = np.asarray(y)
+    n = len(y)
+
+    fft_vals = np.fft.rfft(y - np.mean(y))
+    freqs = np.fft.rfftfreq(n, d=sampling_rate)
+
+    # ignore zero frequency
+    amplitudes = np.abs(fft_vals)[1:]
+    freqs = freqs[1:]
+
+    idx = np.argmax(amplitudes)
+    return freqs[idx], amplitudes[idx]
+
+
+# ----------------------------------------------------------
+# MASTER DIAGNOSTICS FUNCTION
+# ----------------------------------------------------------
+
+def full_seasonality_diagnostics(series, period, season_from_index_fn=None):
+    """
+    Run 4 independent seasonality diagnostics on a time series.
+
+    Parameters
+    ----------
+    series : pd.Series
+        Time series with DatetimeIndex or integer index.
+    period : int
+        Seasonal period (7 for weekly pattern, 12 for monthly, etc.)
+    season_from_index_fn :
+        Optional function to extract seasonal labels from index.
+        If None -> integer modulo groups are used.
+
+    Returns
+    -------
+    A dictionary of results.
+    """
+
+    y = series.values
+
+    # 1. Kruskal–Wallis seasonal labels
+    if season_from_index_fn is not None:
+        season_labels = season_from_index_fn(series.index)
+    else:
+        season_labels = np.arange(len(series)) % period
+
+    kw_stat, kw_p = kw_seasonality_test(y, season_labels)
+
+    # 2. Autocorrelation strength
+    ac_strength = autocorr_seasonality_strength(y, period)
+
+    # 3. STL seasonality strength
+    stl_strength, stl_obj = stl_seasonality_strength(y, period)
+
+    # 4. FFT dominant frequency
+    dom_freq, dom_amp = dominant_frequency_fft(y)
+
+    return {
+        "kruskal_h_statistic": kw_stat,
+        "kruskal_p_value": kw_p,
+        "seasonal_autocorr": ac_strength,
+        "stl_seasonality_strength": stl_strength,
+        "dominant_frequency": dom_freq,
+        "dominant_frequency_amplitude": dom_amp,
+        "stl_obj": stl_obj,   # contains seasonal, trend, resid components
+    }
+
+
+```
+
+
+
+* Feature selection techniques (https://www.blog.trainindata.com/feature-selection-machine-learning-with-python/):
+    * Boruta (shadow feature selection)
+    * Recursive Feature elimination
+
+
 * Time series based features
-    1. Lag and lead features
-    2. Window features
-    3. Ratio of current to window features such as 
+    1. Calendar features
+    2. Lag and lead features
+    3. Window features
+    4. Derived features from window features such as 
         * Ratio of observed day activity to last 8/15 days average activity for that customer
         * Ratio of observed day activity (minus mean) to last 8/15 days std deviation
         * Ratio of observed day activity to last 8/15 days minimum/maximum
-    4. Derived feature from lead lag features (min-max ratio)
+    5. Derived feature from lead lag features (min-max ratio)
         
-        
+
+* Time series features
+    * Exponential weighted moving average of lag features : Captures recent momentum, and at the same time has long term memory (unlike single-point lags) since it still has information of older lags. It also filters noise (noise suppression) and captures the underlying momentum, and can identify mean reverting intensity
+    * Min lag - Max lag (lag_1 - lag_10) : This feature captures rate and direction of change over the lag horizon i.e. how much the series has changed between two points in the past. Large positive signifies upward momentum (captures 2 things momentum and direction). However, it does not capture volatility within the window
+    * Min lag / Max lag (lag_1 / lag_10) : Relative return
+    * Mean of lags (mean(lag_1, lag_2..., lag_10)) : Average recent level
+    * Std Dev of lags : Local volatality
+    * Cumulative sum of diff : Momentum accumulation
+
+```
+
+
+
+
+```
+
+* EWMA is often the single most useful “history summary” feature because it balances:
+    * responsiveness (how quickly a statistic changes to new data)
+    * smoothing (similar to any weighted average)
+    * recency emphasis
+
+* Simple moving average (SMA), Weighted Moving average (WMA) and EWMA are all low pass filters(as long as weights are non-negative) since they keep low-frequency components (slow trends) and suppresses high-frequency components (noise / rapid fluctuations) (smoothing ≈ low-pass filtering)
+
 * The intuition behind `Ratio of observed day activity to last 8/15 days average activity` is the mean gives the baseline, what is normal for that customer, and we compare current behaviour against baseline behaviour
     * Ratio > 1 : sudden spike in activity which could imply fraud
     * Ratio < 1 : sudden drop in activity which could indicate churn, disengagement
@@ -662,7 +884,10 @@ plot that decays more slowly.
 * The intuition behind `Ratio of observed day activity to last 8/15 days minimum/maximum` If current activity greater than historical max or less than historical min, then abnormal behaviour
 
 
-
+* 3 techniques to improve SARIMAX (refer 14)
+    * Hyperparamter tuning along with enforce_stationarity and enforce_invertibility flags are set to False
+    * Exogeneous features
+    * Rolling window cross validation
 
 
 
@@ -1346,6 +1571,11 @@ used to predict the past, avoiding data leakage (includes concepts like expandin
 11. https://www.youtube.com/playlist?list=PLKmQjl_R9bYd32uHImJxQSFZU5LPuXfQe (Time Series - Egor Howell)
 12. https://www.kaggle.com/competitions/store-sales-time-series-forecasting/code?competitionId=29781&sortBy=voteCount&excludeNonAccessedDatasources=true
 13. https://stats.stackexchange.com/questions/28166/how-does-acf-pacf-identify-the-order-of-mo-and-ar-terms 
+14. https://medium.com/@poudel.birat25/three-techniques-to-improve-sarimax-model-for-time-series-forecasting-5d48db984fbe
+15. https://www.reddit.com/r/learnmachinelearning/comments/1f3kr78/can_someone_explain_me_how_can_i_improve_my_model/
+16. https://www.reddit.com/r/statistics/comments/tajjri/q_statistical_tests_for_seasonality_in_time_series/
 
 ### To Explore
 1. https://medium.com/@anagha.srivasa/nvidia-t4-x2-v-s-p100-gpu-when-to-choose-which-one-87cf1c55f386
+2. For mathematical rigor behind AR, MA, ARIMA, check out Ben Lambart youtube channel
+ 
